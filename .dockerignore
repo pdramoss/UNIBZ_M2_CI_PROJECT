@@ -1,0 +1,12 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+data.json
+session.json
+README.md
+Dockerfile
+docker-compose.yml
+.env
+.env.example
+db/

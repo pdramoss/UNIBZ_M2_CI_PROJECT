@@ -1,10 +1,9 @@
 import argparse
-import json
 import os
 import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(BASE_DIR, "Models"), os.path.join(BASE_DIR, "States"), BASE_DIR]
+sys.path[:0] = [os.path.join(BASE_DIR, folder) for folder in ("Models", "States", "Storage")] + [BASE_DIR]
 
 from User import User
 from Customer import Customer
@@ -13,15 +12,13 @@ from Event import Event
 from Registration import Registration
 from DataSource import DataSource
 from Adapter import Adapter
-
-DATA_DIR = os.environ.get("EVENTS_DATA_DIR", BASE_DIR)
-DATA_FILE = os.path.join(DATA_DIR, "data.json")
-SESSION_FILE = os.path.join(DATA_DIR, "session.json")
+from BaseStorage import BaseStorage
+from StorageFactory import create_storage
 
 USAGE = """eventsHolidays.py COMMAND [OPTIONS]
 
 Commands:
-  login --role {manager,customer} --name NAME [--age N]
+  login --role {manager,customer} --name NAME --password PASSWORD [--age N]
   whoami
   logout
   event list
@@ -33,45 +30,6 @@ Commands:
   registration create --event ID --attendee NAME
   registration change ID [--attendee NAME]
   registration cancel ID"""
-
-
-def load() -> DataSource:
-    data_source = DataSource()
-    if not os.path.exists(DATA_FILE):
-        return data_source
-    with open(DATA_FILE) as file:
-        data = json.load(file)
-    for item in data["users"]:
-        if item["type"] == "Customer":
-            data_source.add_customer(Customer(item["id"], item["name"], item["age"], item.get("id_registration", 0)))
-        elif item["type"] == "Manager":
-            data_source.add_manager(Manager(item["id"], item["name"], item["age"], item.get("id_event", 0)))
-        else:
-            data_source.add_user(User(item["id"], item["name"], item["age"]))
-    for item in data["events"]:
-        data_source.add_event(Event(item["id"], item["name"], item["capacity"]))
-    for item in data["registrations"]:
-        user = data_source.get_user(item["userId"])
-        event = data_source.get_event(item["eventId"])
-        data_source.add_registration(Registration(item["id"], user, event))
-    return data_source
-
-
-def save(data_source: DataSource):
-    data = {
-        "users": [{"type": type(user).__name__, **vars(user)} for user in data_source.users.values()],
-        "events": [vars(event) for event in data_source.get_events()],
-        "registrations": [vars(registration) for registration in data_source.get_registrations()],
-    }
-    with open(DATA_FILE, "w") as file:
-        json.dump(data, file, indent=2)
-
-
-def load_session() -> int | None:
-    if not os.path.exists(SESSION_FILE):
-        return None
-    with open(SESSION_FILE) as file:
-        return json.load(file)["user_id"]
 
 
 def next_id(items: dict) -> int:
@@ -113,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     login = commands.add_parser("login", help="log in as a manager or a customer")
     login.add_argument("--role", choices=["manager", "customer"], required=True)
     login.add_argument("--name", required=True)
+    login.add_argument("--password", required=True)
     login.add_argument("--age", type=int, default=0)
     commands.add_parser("whoami", help="show the current user")
     commands.add_parser("logout", help="close the current session")
@@ -145,17 +104,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_login(data_source: DataSource, args):
+def run_login(storage: BaseStorage, data_source: DataSource, args):
     user_type = Manager if args.role == "manager" else Customer
     user = find_user_by_name(data_source, args.name, user_type)
     if user is None:
-        user = user_type(next_id(data_source.users), args.name, args.age, 0)
+        user = user_type(next_id(data_source.users), args.name, args.age, 0, args.password)
         if user_type is Manager:
             data_source.add_manager(user)
         else:
             data_source.add_customer(user)
-    with open(SESSION_FILE, "w") as file:
-        json.dump({"user_id": user.id}, file)
+    elif user.password is None:
+        # Users created without a password (e.g. by a manager with --attendee) set it on their first login
+        user.set_password(args.password)
+    elif not user.check_password(args.password):
+        raise PermissionError("Invalid password")
+    storage.save_session(user.id)
     print(f"Logged in as {type(user).__name__} {user.name} (id {user.id})")
 
 
@@ -201,20 +164,20 @@ def run_registration(adapter: Adapter, data_source: DataSource, args):
 
 def main():
     args = build_parser().parse_args()
-    data_source = load()
+    storage = create_storage(BASE_DIR)
+    data_source = storage.load()
 
     if args.command == "login":
-        run_login(data_source, args)
-        save(data_source)
+        run_login(storage, data_source, args)
+        storage.save(data_source)
         return
     if args.command == "logout":
-        if os.path.exists(SESSION_FILE):
-            os.remove(SESSION_FILE)
+        storage.clear_session()
         print("Logged out")
         return
 
     adapter = Adapter(data_source)
-    user_id = load_session()
+    user_id = storage.load_session()
     if user_id is not None and user_id in data_source.users:
         adapter.login(data_source.get_user(user_id))
 
@@ -230,7 +193,7 @@ def main():
         run_event(adapter, data_source, args)
     else:
         run_registration(adapter, data_source, args)
-    save(data_source)
+    storage.save(data_source)
 
 
 if __name__ == "__main__":
@@ -241,4 +204,9 @@ if __name__ == "__main__":
         sys.exit(1)
     except KeyError as error:
         print(f"Error: {error.args[0]}")
+        sys.exit(1)
+    except Exception as error:
+        if not type(error).__module__.startswith("pymysql"):
+            raise
+        print(f"Error: database error ({error})")
         sys.exit(1)
