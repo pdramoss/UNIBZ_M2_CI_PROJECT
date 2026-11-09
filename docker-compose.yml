@@ -1,12 +1,14 @@
 services:
   db:
     image: mysql:8.4
+    restart: unless-stopped
     environment:
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
     volumes:
+      # Persistent database files: survive `docker compose down`, removed only by `down -v`
       - mysql-data:/var/lib/mysql
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
@@ -30,5 +32,31 @@ services:
       db:
         condition: service_healthy
 
+  api:
+    build: .
+    image: events-holidays:latest
+    restart: unless-stopped
+    entrypoint: ["python", "api.py"]
+    command: []
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      API_SECRET_KEY: ${API_SECRET_KEY:-change-me}
+    ports:
+      - "${API_HOST_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.yaml')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
+  # Named volume "<project>_mysql-data" (e.g. unibz_m2_ci_project_mysql-data).
+  # Kept by `docker compose down`; deleted only by `docker compose down -v`.
   mysql-data:

@@ -1,6 +1,7 @@
 from Event import Event
 from Registration import Registration
 from UserState import UserState
+from Localizable import Msg
 
 
 class CustomerState(UserState):
@@ -9,12 +10,12 @@ class CustomerState(UserState):
 
     def create_registration(self, registration_id: int, event_id: int, user_id: int | None = None) -> Registration:
         if user_id is not None and user_id != self.user.id:
-            raise PermissionError("Customer can only register themselves")
+            raise PermissionError(Msg.CUSTOMER_SELF_ONLY)
         return self._register(registration_id, event_id, self.user)
 
     def update_registration(self, registration_id: int, event_id: int | None = None, user_id: int | None = None) -> Registration:
         if user_id is not None and user_id != self.user.id:
-            raise PermissionError("Customer can only register themselves")
+            raise PermissionError(Msg.CUSTOMER_SELF_ONLY)
         return self._change_registration(self._own_registration(registration_id), event_id, user_id)
 
     def view_registrations(self) -> list[Registration]:
@@ -27,5 +28,5 @@ class CustomerState(UserState):
     def _own_registration(self, registration_id: int) -> Registration:
         registration = self.data_source.get_registration(registration_id)
         if registration.userId != self.user.id:
-            raise PermissionError("Customer can only manage their own registrations")
+            raise PermissionError(Msg.CUSTOMER_OWN_ONLY)
         return registration

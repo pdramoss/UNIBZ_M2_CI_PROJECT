@@ -17,6 +17,11 @@ class ManagerState(UserState):
         self.data_source.update_event(Event(event_id, name, capacity))
 
     def remove_event(self, event_id: int):
+        self.data_source.get_event(event_id)  # KeyError if it does not exist
+        # Cancel the event's registrations first, so none points to a removed event
+        for registration in self.data_source.get_registrations():
+            if registration.eventId == event_id:
+                self.data_source.remove_registration(registration.id)
         self.data_source.remove_event(event_id)
 
     def create_user(self, user: User):

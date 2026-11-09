@@ -1,0 +1,430 @@
+openapi: 3.1.0
+info:
+  title: Events Holidays API
+  version: 1.0.0
+  description: |
+    Resource-oriented REST API for managing events and registrations.
+
+    **Roles**
+    - `manager`: creates, updates and removes events; manages every registration and may register any attendee.
+    - `customer`: lists events and manages only their own registrations.
+
+    **Authentication**: call `POST /api/v1/sessions` to obtain a token, then send it as
+    `Authorization: Bearer <token>`. Logging in with a new name registers a new user.
+
+    **Errors** always use the `Error` body: `{"error": {"code": "...", "message": "..."}}`.
+  contact:
+    name: Pedro David Ramos Salamanca
+servers:
+  - url: http://localhost:8000
+    description: Local (python api.py / docker compose up api)
+tags:
+  - name: Sessions
+  - name: Users
+  - name: Events
+  - name: Registrations
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sessions:
+    post:
+      tags: [Sessions]
+      summary: Log in (or sign up) and get a bearer token
+      operationId: createSession
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionInput" }
+            examples:
+              manager:
+                value: { role: manager, name: Luis, password: luis123 }
+              customer:
+                value: { role: customer, name: Ana, password: ana123, age: 25 }
+      responses:
+        "201":
+          description: Session created
+          headers:
+            Location:
+              description: URL of the logged-in user
+              schema: { type: string, example: /api/v1/users/me }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+              example:
+                token: eyJhbGciOi...
+                user: { id: 1, name: Luis, role: manager, age: 0 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: Wrong password for an existing user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+              example: { error: { code: invalid_credentials, message: Invalid password } }
+
+  /api/v1/sessions/current:
+    delete:
+      tags: [Sessions]
+      summary: Log out (revoke the current token)
+      operationId: deleteSession
+      responses:
+        "204": { description: Logged out }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/users/me:
+    get:
+      tags: [Users]
+      summary: Get the logged-in user
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+              example: { id: 1, name: Luis, role: manager, age: 0 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v1/events:
+    get:
+      tags: [Events]
+      summary: List events
+      operationId: listEvents
+      parameters:
+        - name: minAvailablePlaces
+          in: query
+          required: false
+          description: Only return events with at least this many free places
+          schema: { type: integer, minimum: 0 }
+          example: 5
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Event" }
+              example:
+                - { id: 1, name: Concert, capacity: 40, availablePlaces: 38 }
+                - { id: 2, name: Hiking, capacity: 10, availablePlaces: 0 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Events]
+      summary: Create an event (manager only)
+      operationId: createEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventInput" }
+            example: { name: Concert, capacity: 40 }
+      responses:
+        "201":
+          description: Event created
+          headers:
+            Location:
+              description: URL of the new event
+              schema: { type: string, example: /api/v1/events/1 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+              example: { id: 1, name: Concert, capacity: 40, availablePlaces: 40 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v1/events/{eventId}:
+    parameters:
+      - $ref: "#/components/parameters/EventId"
+    get:
+      tags: [Events]
+      summary: Get one event
+      operationId: getEvent
+      responses:
+        "200":
+          description: The event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+              example: { id: 1, name: Concert, capacity: 40, availablePlaces: 38 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Events]
+      summary: Update an event (manager only)
+      description: Partial update; omitted fields keep their current value.
+      operationId: updateEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventPatch" }
+            example: { capacity: 60 }
+      responses:
+        "200":
+          description: Updated event
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Event" }
+              example: { id: 1, name: Concert, capacity: 60, availablePlaces: 58 }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Events]
+      summary: Remove an event (manager only)
+      operationId: deleteEvent
+      responses:
+        "204": { description: Event removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v1/registrations:
+    get:
+      tags: [Registrations]
+      summary: List registrations
+      description: Managers see all registrations; customers see only their own.
+      operationId: listRegistrations
+      responses:
+        "200":
+          description: List of registrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Registration" }
+              example:
+                - { id: 1, eventId: 1, userId: 2, userName: Ana }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Registrations]
+      summary: Register an attendee to an event
+      description: |
+        Customers always register themselves (`attendee` may be omitted or equal to their own name).
+        Managers may register any attendee by name; unknown names are created as customers.
+      operationId: createRegistration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationInput" }
+            examples:
+              self:
+                summary: Customer registers themselves
+                value: { eventId: 1 }
+              byManager:
+                summary: Manager registers someone
+                value: { eventId: 1, attendee: Ana }
+      responses:
+        "201":
+          description: Registration created
+          headers:
+            Location:
+              description: URL of the new registration
+              schema: { type: string, example: /api/v1/registrations/1 }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Registration" }
+              example: { id: 1, eventId: 1, userId: 2, userName: Ana }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/EventFull" }
+
+  /api/v1/registrations/{registrationId}:
+    parameters:
+      - $ref: "#/components/parameters/RegistrationId"
+    get:
+      tags: [Registrations]
+      summary: Get one registration
+      operationId: getRegistration
+      responses:
+        "200":
+          description: The registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Registration" }
+              example: { id: 1, eventId: 1, userId: 2, userName: Ana }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Registrations]
+      summary: Change a registration's attendee or event
+      operationId: updateRegistration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegistrationPatch" }
+            examples:
+              attendee:
+                value: { attendee: Marco }
+              event:
+                value: { eventId: 2 }
+      responses:
+        "200":
+          description: Updated registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Registration" }
+              example: { id: 1, eventId: 1, userId: 3, userName: Marco }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/EventFull" }
+    delete:
+      tags: [Registrations]
+      summary: Cancel a registration
+      operationId: deleteRegistration
+      responses:
+        "204": { description: Registration cancelled }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token returned by `POST /api/v1/sessions` (valid 8 hours).
+
+  parameters:
+    EventId:
+      name: eventId
+      in: path
+      required: true
+      description: Event identifier
+      schema: { type: integer, minimum: 1 }
+      example: 1
+    RegistrationId:
+      name: registrationId
+      in: path
+      required: true
+      description: Registration identifier
+      schema: { type: integer, minimum: 1 }
+      example: 1
+
+  schemas:
+    SessionInput:
+      type: object
+      required: [role, name, password]
+      additionalProperties: false
+      properties:
+        role: { type: string, enum: [manager, customer] }
+        name: { type: string, minLength: 1, example: Luis }
+        password: { type: string, minLength: 1, format: password }
+        age: { type: integer, minimum: 0, default: 0 }
+    Session:
+      type: object
+      required: [token, user]
+      properties:
+        token: { type: string, description: Bearer token }
+        user: { $ref: "#/components/schemas/User" }
+    User:
+      type: object
+      required: [id, name, role, age]
+      properties:
+        id: { type: integer, example: 1 }
+        name: { type: string, example: Luis }
+        role: { type: string, enum: [manager, customer] }
+        age: { type: integer, example: 0 }
+    EventInput:
+      type: object
+      required: [name, capacity]
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, example: Concert }
+        capacity: { type: integer, minimum: 1, example: 40 }
+    EventPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        capacity: { type: integer, minimum: 1 }
+    Event:
+      type: object
+      required: [id, name, capacity, availablePlaces]
+      properties:
+        id: { type: integer, readOnly: true, example: 1 }
+        name: { type: string, example: Concert }
+        capacity: { type: integer, example: 40 }
+        availablePlaces: { type: integer, readOnly: true, example: 38 }
+    RegistrationInput:
+      type: object
+      required: [eventId]
+      additionalProperties: false
+      properties:
+        eventId: { type: integer, minimum: 1, example: 1 }
+        attendee:
+          type: string
+          minLength: 1
+          description: Attendee name (managers). Customers may omit it.
+          example: Ana
+    RegistrationPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        attendee: { type: string, minLength: 1 }
+        eventId: { type: integer, minimum: 1 }
+    Registration:
+      type: object
+      required: [id, eventId, userId, userName]
+      properties:
+        id: { type: integer, readOnly: true, example: 1 }
+        eventId: { type: integer, example: 1 }
+        userId: { type: integer, example: 2 }
+        userName: { type: string, example: Ana }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: Machine-readable error code, example: not_found }
+            message: { type: string, description: Human-readable explanation, example: Event 7 not found }
+
+  responses:
+    BadRequest:
+      description: Invalid JSON body, missing/invalid field or query parameter
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: validation_error, message: "Field 'capacity' must be >= 1" } }
+    Unauthorized:
+      description: Missing, invalid, expired or revoked bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: unauthorized, message: Missing bearer token } }
+    Forbidden:
+      description: The logged-in role is not allowed to perform this action
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: forbidden, message: Customer cannot add events } }
+    NotFound:
+      description: The referenced resource does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: not_found, message: Event 7 not found } }
+    EventFull:
+      description: The event has no available places
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: event_full, message: Event 1 is full } }

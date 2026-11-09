@@ -33,8 +33,12 @@ COPY --from=deps /install/packages /usr/local
 COPY Models ./Models
 COPY States ./States
 COPY Storage ./Storage
-COPY Adapter.py DataSource.py ./
-COPY eventsHolidays.py ./
+COPY Localizable.py Adapter.py DataSource.py Services.py ./
+COPY openapi.yaml ./
+COPY static ./static
+COPY eventsHolidays.py api.py ./
+
+EXPOSE 8000
 
 USER appuser
 ENTRYPOINT ["python", "eventsHolidays.py"]

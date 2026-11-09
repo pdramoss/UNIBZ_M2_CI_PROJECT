@@ -5,6 +5,69 @@
 
 Event registration system with two user roles, **Customer** and **Manager**. Access control is implemented with the **State** design pattern: the `Adapter` delegates every action to a role-specific state object, which either performs it on the `DataSource` or raises `PermissionError`.
 
+## Quick start
+
+All commands run from the project folder of a fresh checkout. The web app is served at **http://localhost:8000**.
+
+| Address | What it is |
+|---|---|
+| http://localhost:8000 | Web app (log in, events, registrations) |
+| http://localhost:8000/docs | Interactive API documentation (Swagger UI) |
+| http://localhost:8000/openapi.yaml | OpenAPI specification |
+
+### Option A: Docker Compose (MySQL, recommended)
+
+Requires Docker with Compose v2.
+
+```
+cp .env.example .env
+docker compose up -d --build --wait api
+```
+
+Open http://localhost:8000. `--wait` returns once the database and the API are healthy.
+
+Use the CLI against the same database:
+
+```
+docker compose run --rm events login --role manager --name Luis --password luis123
+docker compose run --rm events event list
+```
+
+Stop:
+
+```
+docker compose down       # stops the app, KEEPS the data (volume <project>_mysql-data)
+docker compose down -v    # stops the app and DELETES the database volume
+```
+
+The MySQL data lives in a named Docker volume (`docker volume ls` shows it as `<project>_mysql-data`, e.g. `unibz_m2_ci_project_mysql-data`), so it survives `down`/`up` and image rebuilds. To use other ports, change `API_HOST_PORT` / `DB_HOST_PORT` in `.env`.
+
+### Option B: Local Python (JSON files, no Docker)
+
+Requires Python 3.12+.
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python api.py
+```
+
+Open http://localhost:8000. Stop with `Ctrl+C`. Data is stored in `data.json` in the project folder (delete it to start fresh).
+
+### Run the tests
+
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pytest -q
+openapi-spec-validator openapi.yaml
+```
+
+- `tests/test_rules.py`: unit tests of the application rules (passwords, login/sign-up, capacity, manager and customer permissions, removing events, JSON storage).
+- `tests/test_api.py`: REST API tests (URLs, methods, status codes, errors) and OpenAPI validation.
+
 ## Class diagram
 
 ```mermaid
@@ -313,6 +376,47 @@ Logged out
 $ python3 eventsHolidays.py whoami
 No user logged in
 ```
+
+## REST API and web form
+
+[api.py](api.py) exposes the same use cases as the CLI as a resource-oriented REST API (Flask). It reuses `Adapter`, the user states and the storage layer, so the role rules are identical. The full contract (endpoints, parameters, schemas, examples and errors) is in [openapi.yaml](openapi.yaml) (OpenAPI 3.1).
+
+```
+pip install -r requirements.txt
+python api.py                 # http://localhost:8000
+```
+
+| URL | Content |
+|---|---|
+| `/` | Web form: log in, manage events and registrations |
+| `/docs` | Swagger UI for the API |
+| `/openapi.yaml` | OpenAPI specification |
+
+| Method | URL | Success | Errors |
+|---|---|---|---|
+| POST | `/api/v1/sessions` | 201 | 400, 401 |
+| DELETE | `/api/v1/sessions/current` | 204 | 401 |
+| GET | `/api/v1/users/me` | 200 | 401 |
+| GET | `/api/v1/events?minAvailablePlaces=N` | 200 | 400, 401 |
+| POST | `/api/v1/events` | 201 + `Location` | 400, 401, 403 |
+| GET / PATCH / DELETE | `/api/v1/events/{id}` | 200 / 200 / 204 | 400, 401, 403, 404 |
+| GET | `/api/v1/registrations` | 200 | 401 |
+| POST | `/api/v1/registrations` | 201 + `Location` | 400, 401, 403, 404, 409 |
+| GET / PATCH / DELETE | `/api/v1/registrations/{id}` | 200 / 200 / 204 | 400, 401, 403, 404, 409 |
+
+Errors always have the body `{"error": {"code": "...", "message": "..."}}`. `409 event_full` means the event has no places left.
+
+```
+TOKEN=$(curl -s -X POST localhost:8000/api/v1/sessions -H 'Content-Type: application/json' \
+  -d '{"role":"manager","name":"Luis","password":"luis123"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+curl -s -X POST localhost:8000/api/v1/events -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"name":"Concert","capacity":40}'
+curl -s localhost:8000/api/v1/events -H "Authorization: Bearer $TOKEN"
+```
+
+With Docker: `docker compose up -d api` (port `API_HOST_PORT`, default 8000; set `API_SECRET_KEY` in `.env`).
+
+Tests: `pip install -r requirements-dev.txt && pytest -q tests`.
 
 ## Docker
 

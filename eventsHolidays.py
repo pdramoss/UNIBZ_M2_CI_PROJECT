@@ -14,6 +14,8 @@ from DataSource import DataSource
 from Adapter import Adapter
 from BaseStorage import BaseStorage
 from StorageFactory import create_storage
+from Services import next_id, find_user_by_name, resolve_attendee, available_places, login_user
+from Localizable import Msg, Role
 
 USAGE = """eventsHolidays.py COMMAND [OPTIONS]
 
@@ -32,36 +34,14 @@ Commands:
   registration cancel ID"""
 
 
-def next_id(items: dict) -> int:
-    return max(items, default=0) + 1
-
-
-def find_user_by_name(data_source: DataSource, name: str, user_type: type | None = None) -> User | None:
-    for user in data_source.users.values():
-        if user.name == name and (user_type is None or type(user) is user_type):
-            return user
-    return None
-
-
-def resolve_attendee(adapter: Adapter, data_source: DataSource, name: str) -> int:
-    user = find_user_by_name(data_source, name)
-    if user is None:
-        user = Customer(next_id(data_source.users), name, 0, 0)
-        adapter.create_user(user)
-    return user.id
-
-
-def available_places(data_source: DataSource, event: Event) -> int:
-    taken = sum(1 for r in data_source.get_registrations() if r.eventId == event.id)
-    return event.capacity - taken
-
-
 def print_event(data_source: DataSource, event: Event):
-    print(f"[{event.id}] {event.name} - capacity {event.capacity}, available {available_places(data_source, event)}")
+    print(Msg.EVENT_LINE.format(id=event.id, name=event.name, capacity=event.capacity,
+                                available=available_places(data_source, event)))
 
 
 def print_registration(registration: Registration):
-    print(f"[{registration.id}] event {registration.eventId} - {registration.userName} (user {registration.userId})")
+    print(Msg.REGISTRATION_LINE.format(id=registration.id, event_id=registration.eventId,
+                                       user_name=registration.userName, user_id=registration.userId))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -69,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
 
     login = commands.add_parser("login", help="log in as a manager or a customer")
-    login.add_argument("--role", choices=["manager", "customer"], required=True)
+    login.add_argument("--role", choices=list(Role.ALL), required=True)
     login.add_argument("--name", required=True)
     login.add_argument("--password", required=True)
     login.add_argument("--age", type=int, default=0)
@@ -105,21 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_login(storage: BaseStorage, data_source: DataSource, args):
-    user_type = Manager if args.role == "manager" else Customer
-    user = find_user_by_name(data_source, args.name, user_type)
-    if user is None:
-        user = user_type(next_id(data_source.users), args.name, args.age, 0, args.password)
-        if user_type is Manager:
-            data_source.add_manager(user)
-        else:
-            data_source.add_customer(user)
-    elif user.password is None:
-        # Users created without a password (e.g. by a manager with --attendee) set it on their first login
-        user.set_password(args.password)
-    elif not user.check_password(args.password):
-        raise PermissionError("Invalid password")
+    user = login_user(data_source, args.role, args.name, args.password, args.age)
     storage.save_session(user.id)
-    print(f"Logged in as {type(user).__name__} {user.name} (id {user.id})")
+    print(Msg.LOGGED_IN.format(type=type(user).__name__, name=user.name, id=user.id))
 
 
 def run_event(adapter: Adapter, data_source: DataSource, args):
@@ -129,16 +97,16 @@ def run_event(adapter: Adapter, data_source: DataSource, args):
     elif args.action == "add":
         event = Event(next_id(data_source.events), args.name, args.capacity)
         adapter.add_event(event)
-        print(f"Event {event.id} created")
+        print(Msg.EVENT_CREATED.format(id=event.id))
     elif args.action == "update":
         current = data_source.get_event(args.id)
         name = current.name if args.name is None else args.name
         capacity = current.capacity if args.capacity is None else args.capacity
         adapter.update_event(args.id, name, capacity)
-        print(f"Event {args.id} updated")
+        print(Msg.EVENT_UPDATED.format(id=args.id))
     elif args.action == "remove":
         adapter.remove_event(args.id)
-        print(f"Event {args.id} removed")
+        print(Msg.EVENT_REMOVED.format(id=args.id))
     elif args.action == "search":
         for event in adapter.view_events():
             if available_places(data_source, event) >= args.available_places:
@@ -152,14 +120,14 @@ def run_registration(adapter: Adapter, data_source: DataSource, args):
     elif args.action == "create":
         user_id = resolve_attendee(adapter, data_source, args.attendee)
         registration = adapter.create_registration(next_id(data_source.registrations), args.event, user_id)
-        print(f"Registration {registration.id} created")
+        print(Msg.REGISTRATION_CREATED.format(id=registration.id))
     elif args.action == "change":
         user_id = None if args.attendee is None else resolve_attendee(adapter, data_source, args.attendee)
         adapter.update_registration(args.id, user_id=user_id)
-        print(f"Registration {args.id} updated")
+        print(Msg.REGISTRATION_UPDATED.format(id=args.id))
     elif args.action == "cancel":
         adapter.cancel_registration(args.id)
-        print(f"Registration {args.id} cancelled")
+        print(Msg.REGISTRATION_CANCELLED.format(id=args.id))
 
 
 def main():
@@ -173,7 +141,7 @@ def main():
         return
     if args.command == "logout":
         storage.clear_session()
-        print("Logged out")
+        print(Msg.LOGGED_OUT)
         return
 
     adapter = Adapter(data_source)
@@ -183,10 +151,10 @@ def main():
 
     if args.command == "whoami":
         if adapter.state is None:
-            print("No user logged in")
+            print(Msg.NO_USER_LOGGED_IN)
         else:
             user = adapter.state.user
-            print(f"{type(user).__name__} {user.name} (id {user.id})")
+            print(Msg.WHOAMI.format(type=type(user).__name__, name=user.name, id=user.id))
         return
 
     if args.command == "event":
@@ -200,13 +168,13 @@ if __name__ == "__main__":
     try:
         main()
     except (PermissionError, ValueError) as error:
-        print(f"Error: {error}")
+        print(Msg.ERROR.format(error=error))
         sys.exit(1)
     except KeyError as error:
-        print(f"Error: {error.args[0]}")
+        print(Msg.ERROR.format(error=error.args[0]))
         sys.exit(1)
     except Exception as error:
         if not type(error).__module__.startswith("pymysql"):
             raise
-        print(f"Error: database error ({error})")
+        print(Msg.DATABASE_ERROR.format(error=error))
         sys.exit(1)

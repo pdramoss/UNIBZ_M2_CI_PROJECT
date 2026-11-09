@@ -18,3 +18,6 @@ class BaseStorage(ABC):
 
     @abstractmethod
     def clear_session(self): ...
+
+    def close(self):
+        """Release resources (e.g. a database connection). Nothing to do by default."""

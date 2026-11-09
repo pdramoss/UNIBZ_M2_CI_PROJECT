@@ -7,6 +7,7 @@ from DataSource import DataSource
 from UserState import UserState
 from CustomerState import CustomerState
 from ManagerState import ManagerState
+from Localizable import Msg
 
 
 class Adapter:
@@ -22,7 +23,7 @@ class Adapter:
     def login(self, user: User):
         state_class = self.STATES.get(type(user))
         if state_class is None:
-            raise PermissionError(f"No state defined for {type(user).__name__}")
+            raise PermissionError(Msg.NO_STATE.format(type=type(user).__name__))
         self.state = state_class(user, self.data_source)
 
     def logout(self):
@@ -30,7 +31,7 @@ class Adapter:
 
     def _current_state(self) -> UserState:
         if self.state is None:
-            raise PermissionError("No user logged in")
+            raise PermissionError(Msg.NO_USER_LOGGED_IN)
         return self.state
 
     def view_events(self) -> list[Event]:

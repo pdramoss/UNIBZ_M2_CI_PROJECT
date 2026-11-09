@@ -4,6 +4,11 @@ from User import User
 from Event import Event
 from Registration import Registration
 from DataSource import DataSource
+from Localizable import Msg
+
+
+class EventFullError(ValueError):
+    """Raised when an event has no places left."""
 
 
 class UserState(ABC):
@@ -12,39 +17,39 @@ class UserState(ABC):
         self.data_source = data_source
 
     def _deny(self, action: str):
-        raise PermissionError(f"{type(self.user).__name__} cannot {action}")
+        raise PermissionError(Msg.CANNOT.format(type=type(self.user).__name__, action=action))
 
     def view_events(self) -> list[Event]:
-        self._deny("view events")
+        self._deny(Msg.ACTION_VIEW_EVENTS)
 
     def create_user(self, user: User):
-        self._deny("create users")
+        self._deny(Msg.ACTION_CREATE_USERS)
 
     def create_registration(self, registration_id: int, event_id: int, user_id: int | None = None) -> Registration:
-        self._deny("create registrations")
+        self._deny(Msg.ACTION_CREATE_REGISTRATIONS)
 
     def update_registration(self, registration_id: int, event_id: int | None = None, user_id: int | None = None) -> Registration:
-        self._deny("update registrations")
+        self._deny(Msg.ACTION_UPDATE_REGISTRATIONS)
 
     def view_registrations(self) -> list[Registration]:
-        self._deny("view registrations")
+        self._deny(Msg.ACTION_VIEW_REGISTRATIONS)
 
     def cancel_registration(self, registration_id: int):
-        self._deny("cancel registrations")
+        self._deny(Msg.ACTION_CANCEL_REGISTRATIONS)
 
     def add_event(self, event: Event):
-        self._deny("add events")
+        self._deny(Msg.ACTION_ADD_EVENTS)
 
     def update_event(self, event_id: int, name: str, capacity: int):
-        self._deny("update events")
+        self._deny(Msg.ACTION_UPDATE_EVENTS)
 
     def remove_event(self, event_id: int):
-        self._deny("remove events")
+        self._deny(Msg.ACTION_REMOVE_EVENTS)
 
     def _check_capacity(self, event: Event):
         taken = sum(1 for r in self.data_source.get_registrations() if r.eventId == event.id)
         if taken >= event.capacity:
-            raise ValueError(f"Event {event.id} is full")
+            raise EventFullError(Msg.EVENT_FULL.format(id=event.id))
 
     def _register(self, registration_id: int, event_id: int, user: User) -> Registration:
         event = self.data_source.get_event(event_id)

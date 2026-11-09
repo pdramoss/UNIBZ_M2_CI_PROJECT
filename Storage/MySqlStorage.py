@@ -91,6 +91,9 @@ class MySqlStorage(BaseStorage):
         else:
             cursor.execute(f"DELETE FROM {table}")
 
+    def close(self):
+        self.connection.close()
+
     def load_session(self) -> int | None:
         with self.connection.cursor() as cursor:
             cursor.execute("SELECT user_id FROM session WHERE id = 1")

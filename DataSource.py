@@ -3,6 +3,7 @@ from Customer import Customer
 from Manager import Manager
 from Event import Event
 from Registration import Registration
+from Localizable import Msg
 
 
 class DataSource:
@@ -26,7 +27,7 @@ class DataSource:
 
     def get_user(self, user_id: int) -> User:
         if user_id not in self.users:
-            raise KeyError(f"User {user_id} not found")
+            raise KeyError(Msg.USER_NOT_FOUND.format(id=user_id))
         return self.users[user_id]
 
     def add_event(self, event: Event):
@@ -34,7 +35,7 @@ class DataSource:
 
     def get_event(self, event_id: int) -> Event:
         if event_id not in self.events:
-            raise KeyError(f"Event {event_id} not found")
+            raise KeyError(Msg.EVENT_NOT_FOUND.format(id=event_id))
         return self.events[event_id]
 
     def get_events(self) -> list[Event]:
@@ -53,7 +54,7 @@ class DataSource:
 
     def get_registration(self, registration_id: int) -> Registration:
         if registration_id not in self.registrations:
-            raise KeyError(f"Registration {registration_id} not found")
+            raise KeyError(Msg.REGISTRATION_NOT_FOUND.format(id=registration_id))
         return self.registrations[registration_id]
 
     def get_registrations(self) -> list[Registration]:

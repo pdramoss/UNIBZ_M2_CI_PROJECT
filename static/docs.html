@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Events Holidays API docs</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap">
+  <style>
+    /* StreamVibe dark theme frame around Swagger UI */
+    body { margin: 0; background: #0F0F0F; font-family: "Inter", system-ui, sans-serif; }
+    #swagger-ui { background: #FCFCFD; max-width: 1200px; margin: 24px auto; border-radius: 12px;
+                  border: 1px solid #262626; overflow: hidden; }
+    .swagger-ui .topbar { display: none; }
+    .swagger-ui .btn.execute, .swagger-ui .btn.authorize { background: #E50000; border-color: #E50000; color: #FFFFFF; }
+  </style>
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+<script>
+  SwaggerUIBundle({ url: "/openapi.yaml", dom_id: "#swagger-ui" });
+</script>
+</body>
+</html>

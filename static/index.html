@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Events Holidays</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="navbar">
+  <a class="logo" href="/"><span class="logo-mark" aria-hidden="true"></span>Events Holidays</a>
+  <nav class="tabs" id="tabs" hidden aria-label="Sections">
+    <button class="tab" data-tab="events">Events</button>
+    <button class="tab" data-tab="registrations">Registrations</button>
+    <a class="tab" href="/docs">API Docs</a>
+  </nav>
+  <div class="nav-user" id="nav-user" hidden>
+    <span id="whoami-name"></span>
+    <span class="pill" id="whoami-role"></span>
+    <button id="logout-btn" class="secondary small">Log out</button>
+  </div>
+</header>
+
+<main>
+  <!-- ============ Logged out: hero + login form ============ -->
+  <section id="login-view" class="hero">
+    <div class="hero-text">
+      <h1>Welcome to Events Holidays</h1>
+      <p class="lead">Browse events, book your place and manage registrations — all in one place.</p>
+      <div class="roles-card">
+        <div class="role-item">
+          <span class="badge-num">M</span>
+          <div><h3>Manager</h3><p>Creates, edits and removes events. Registers any attendee and manages every registration.</p></div>
+        </div>
+        <div class="role-item">
+          <span class="badge-num">C</span>
+          <div><h3>Customer</h3><p>Browses events, registers themselves and cancels their own registrations.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <form id="login-form" class="form-card" novalidate>
+      <div class="field">
+        <span class="field-label">I am a</span>
+        <div class="segmented" role="radiogroup" aria-label="Role">
+          <label><input type="radio" name="role" value="customer" checked><span>Customer</span></label>
+          <label><input type="radio" name="role" value="manager"><span>Manager</span></label>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input name="name" required autocomplete="username" placeholder="Enter your name">
+        </label>
+        <label class="field">
+          <span class="field-label">Age</span>
+          <input name="age" type="number" min="0" placeholder="Enter your age">
+        </label>
+      </div>
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input name="password" type="password" required autocomplete="current-password" placeholder="Enter your password">
+      </label>
+      <div class="form-footer">
+        <label class="check"><input type="checkbox" name="remember"><span>Remember me on this device</span></label>
+        <button type="submit" class="primary">Log in / Sign up</button>
+      </div>
+      <p class="hint">A new name creates a new account with the selected role.</p>
+    </form>
+  </section>
+
+  <!-- ============ Events ============ -->
+  <section id="events-view" class="view" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Events</h2>
+        <p class="lead">Pick an event and book your place. Open an item to see its actions.</p>
+      </div>
+      <div class="head-actions">
+        <form id="search-form" class="filter">
+          <input name="min" type="number" min="0" placeholder="Min. free places" aria-label="Minimum free places">
+          <button type="submit" class="secondary">Filter</button>
+        </form>
+        <button id="new-event-btn" class="primary manager-only">New event</button>
+      </div>
+    </div>
+
+    <form id="event-form" class="form-card collapsible" hidden>
+      <h3 id="event-form-title">New event</h3>
+      <input type="hidden" name="id">
+      <div class="field-row">
+        <label class="field"><span class="field-label">Name</span>
+          <input name="name" required placeholder="Enter event name"></label>
+        <label class="field"><span class="field-label">Capacity</span>
+          <input name="capacity" type="number" min="1" required placeholder="Number of places"></label>
+      </div>
+      <div class="form-footer end">
+        <button type="button" id="event-cancel" class="secondary">Cancel</button>
+        <button type="submit" class="primary">Save event</button>
+      </div>
+    </form>
+
+    <div id="events-list" class="list-2col"></div>
+  </section>
+
+  <!-- ============ Registrations ============ -->
+  <section id="registrations-view" class="view" hidden>
+    <div class="section-head">
+      <div>
+        <h2>Registrations</h2>
+        <p class="lead" id="registrations-lead">Your bookings.</p>
+      </div>
+      <div class="head-actions">
+        <button id="new-registration-btn" class="primary">New registration</button>
+      </div>
+    </div>
+
+    <form id="registration-form" class="form-card collapsible" hidden>
+      <h3>New registration</h3>
+      <div class="field-row">
+        <label class="field"><span class="field-label">Event</span>
+          <select name="eventId" required></select></label>
+        <label class="field manager-only"><span class="field-label">Attendee</span>
+          <input name="attendee" placeholder="Attendee name (empty = me)"></label>
+      </div>
+      <div class="form-footer end">
+        <button type="button" id="registration-cancel" class="secondary">Cancel</button>
+        <button type="submit" class="primary">Register</button>
+      </div>
+    </form>
+
+    <div id="registrations-list" class="list-2col"></div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section id="cta" class="cta" hidden>
+    <div>
+      <h2>Need the raw API?</h2>
+      <p class="lead">Every action on this page is a REST call. Explore the endpoints, parameters and errors in the interactive documentation.</p>
+    </div>
+    <a class="button primary" href="/docs">Open API Docs</a>
+  </section>
+
+  <details class="log-panel">
+    <summary>Last API response</summary>
+    <pre id="log">–</pre>
+  </details>
+</main>
+
+<footer class="footer">
+  <div class="footer-cols">
+    <div><h4>App</h4><a href="#" data-goto="events">Events</a><a href="#" data-goto="registrations">Registrations</a></div>
+    <div><h4>Developers</h4><a href="/docs">API Docs</a><a href="/openapi.yaml">openapi.yaml</a></div>
+    <div><h4>Project</h4><span>UNIBZ · Continuous Integration</span></div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 Events Holidays. All rights reserved.</span>
+  </div>
+</footer>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

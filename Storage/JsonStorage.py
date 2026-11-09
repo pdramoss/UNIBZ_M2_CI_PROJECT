@@ -8,12 +8,13 @@ from Event import Event
 from Registration import Registration
 from DataSource import DataSource
 from BaseStorage import BaseStorage
+from Localizable import Defaults
 
 
 class JsonStorage(BaseStorage):
     def __init__(self, data_dir: str):
-        self.data_file = os.path.join(data_dir, "data.json")
-        self.session_file = os.path.join(data_dir, "session.json")
+        self.data_file = os.path.join(data_dir, Defaults.DATA_FILE)
+        self.session_file = os.path.join(data_dir, Defaults.SESSION_FILE)
 
     def load(self) -> DataSource:
         data_source = DataSource()
